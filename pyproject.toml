@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "hayhooks>=1.0.1",
+    "hayhooks[mcp]>=1.0.1",
     "haystack-ai>=2.18.1",
     "llama-index>=0.14.4",
     "llama-index-vector-stores-opensearch>=0.6.2",
