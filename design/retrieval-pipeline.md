@@ -4,7 +4,7 @@
 
 ```mermaid
 sequenceDiagram
-    participant User as User (Actor)
+    Actor User as User
     participant Copilot as GitHub Copilot
     participant MCP as MCP Tool
     participant EC2 as EC2 (Haystack + Hayhooks)
