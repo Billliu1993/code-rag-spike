@@ -4,7 +4,7 @@ CLI tool for querying the hybrid retrieval pipeline.
 import sys
 from pathlib import Path
 import click
-from typing import List, Dict, Any
+from typing import Any
 
 # Add parent directory to import root config
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -48,17 +48,18 @@ def format_document(doc: Any, index: int, show_scores: bool = False, show_metada
     
     header = " ".join(header_parts)
     
-    # Truncate content if too long (unless showing full metadata)
-    max_content_length = 500 if not show_metadata else 2000
-    if len(content) > max_content_length:
-        content = content[:max_content_length] + "..."
+    # Don't truncate content - show full code
+    # Truncate only for display if too long (unless showing full metadata)
+    display_content = content
+    if not show_metadata and len(content) > 500:
+        display_content = content[:500] + "..."
     
     # Build output
     lines = [
         "━" * 80,
         header,
         "━" * 80,
-        content,
+        display_content,
     ]
     
     if show_metadata:
@@ -69,37 +70,6 @@ def format_document(doc: Any, index: int, show_scores: bool = False, show_metada
                 lines.append(f"  • {key}: {value}")
     
     return "\n".join(lines)
-
-
-def merge_results(bm25_docs: List[Any], embedding_docs: List[Any]) -> List[Any]:
-    """
-    Merge and deduplicate results from BM25 and embedding retrievers.
-    
-    Args:
-        bm25_docs: Documents from BM25 retriever
-        embedding_docs: Documents from embedding retriever
-        
-    Returns:
-        Merged and deduplicated list of documents
-    """
-    seen_ids = set()
-    merged = []
-    
-    # Add BM25 results first (they might have exact keyword matches)
-    for doc in bm25_docs:
-        doc_id = doc.id if hasattr(doc, 'id') else str(getattr(doc.meta, 'document_id', ''))
-        if doc_id and doc_id not in seen_ids:
-            seen_ids.add(doc_id)
-            merged.append(doc)
-    
-    # Add embedding results
-    for doc in embedding_docs:
-        doc_id = doc.id if hasattr(doc, 'id') else str(getattr(doc.meta, 'document_id', ''))
-        if doc_id and doc_id not in seen_ids:
-            seen_ids.add(doc_id)
-            merged.append(doc)
-    
-    return merged
 
 
 @click.command()
@@ -133,24 +103,20 @@ def main(query: str, top_k_bm25: int, top_k_embedding: int, show_scores: bool, s
         click.echo("⚡ Running query...")
         result = query_pipeline(pipeline, query)
         
-        # Extract results
-        bm25_docs = result.get("bm25_retriever", {}).get("documents", [])
-        embedding_docs = result.get("embedding_retriever", {}).get("documents", [])
-        
-        # Merge results
-        merged_docs = merge_results(bm25_docs, embedding_docs)
+        # Extract results from hybrid retriever (already merged)
+        docs = result.get("retriever", {}).get("documents", [])
         
         # Display summary
         click.echo()
-        click.echo(f"📊 Found {len(merged_docs)} unique results ({len(bm25_docs)} BM25 + {len(embedding_docs)} Semantic)")
+        click.echo(f"📊 Found {len(docs)} results (hybrid: BM25 + Semantic)")
         click.echo()
         
-        if not merged_docs:
+        if not docs:
             click.echo("❌ No results found")
             return
         
         # Display results
-        for i, doc in enumerate(merged_docs, 1):
+        for i, doc in enumerate(docs, 1):
             formatted = format_document(doc, i, show_scores, show_metadata)
             click.echo(formatted)
             click.echo()

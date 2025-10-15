@@ -15,7 +15,7 @@ from haystack import Pipeline
 from haystack.components.embedders import OpenAITextEmbedder
 from haystack.utils import Secret
 from haystack_integrations.document_stores.opensearch import OpenSearchDocumentStore
-from haystack_integrations.components.retrievers.opensearch import OpenSearchEmbeddingRetriever, OpenSearchBM25Retriever
+from haystack_integrations.components.retrievers.opensearch import OpenSearchHybridRetriever
 
 # Add parent directory to import root config
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -30,6 +30,7 @@ from config import (
     HAYSTACK_FIELD_MAPPING,
     DEFAULT_TOP_K_BM25,
     DEFAULT_TOP_K_EMBEDDING,
+    DEFAULT_JOIN_MODE,
 )
 
 
@@ -66,44 +67,36 @@ def create_hybrid_pipeline(
     top_k_embedding: int = DEFAULT_TOP_K_EMBEDDING,
 ) -> Pipeline:
     """
-    Create hybrid retrieval pipeline combining BM25 and semantic search.
+    Create hybrid retrieval pipeline using OpenSearchHybridRetriever.
     
     Args:
         top_k_bm25: Number of results from BM25 (keyword) search
         top_k_embedding: Number of results from semantic (embedding) search
         
     Returns:
-        Configured Haystack Pipeline
+        Configured Haystack Pipeline with OpenSearchHybridRetriever
     """
     # Initialize document store
     document_store = get_document_store()
     
     # Create text embedder (same model as ingestion)
-    text_embedder = OpenAITextEmbedder(
+    embedder = OpenAITextEmbedder(
         model=EMBEDDING_MODEL,
         api_key=Secret.from_token(OPENAI_API_KEY) if OPENAI_API_KEY else Secret.from_env_var("OPENAI_API_KEY")
     )
     
-    # Create BM25 retriever (keyword search)
-    bm25_retriever = OpenSearchBM25Retriever(
+    # Create hybrid retriever (combines BM25 and embedding search)
+    hybrid_retriever = OpenSearchHybridRetriever(
         document_store=document_store,
-        top_k=top_k_bm25,
+        embedder=embedder,
+        top_k_bm25=top_k_bm25,
+        top_k_embedding=top_k_embedding,
+        join_mode=DEFAULT_JOIN_MODE,
     )
     
-    # Create embedding retriever (semantic search)
-    embedding_retriever = OpenSearchEmbeddingRetriever(
-        document_store=document_store,
-        top_k=top_k_embedding,
-    )
-    
-    # Build pipeline
+    # Build simple pipeline
     pipeline = Pipeline()
-    pipeline.add_component("text_embedder", text_embedder)
-    pipeline.add_component("bm25_retriever", bm25_retriever)
-    pipeline.add_component("embedding_retriever", embedding_retriever)
-    
-    # Connect components
-    pipeline.connect("text_embedder.embedding", "embedding_retriever.query_embedding")
+    pipeline.add_component("retriever", hybrid_retriever)
     
     return pipeline
 
@@ -120,11 +113,10 @@ def query_pipeline(
         query: Search query text
         
     Returns:
-        Dictionary containing results from both retrievers
+        Dictionary containing merged results from hybrid retriever
     """
     result = pipeline.run({
-        "text_embedder": {"text": query},
-        "bm25_retriever": {"query": query},
+        "retriever": {"query": query},
     })
     
     return result

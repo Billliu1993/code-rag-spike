@@ -123,9 +123,12 @@ code-rag-spike/
 ├── ingestion/               # Ingestion pipeline
 │   ├── ingest.py           # Main ingestion script
 │   └── utils.py            # Helper functions
-├── retrieval/               # Retrieval pipeline
+├── retrieval/               # Retrieval pipeline (CLI)
 │   ├── query.py            # CLI query tool
 │   └── pipeline.py         # Hybrid retrieval setup
+├── pipelines/               # MCP pipeline deployments
+│   └── code-rag/           # Code RAG MCP tool
+│       └── pipeline_wrapper.py
 └── opensearch/              # OpenSearch Docker setup
     ├── docker-compose.yml
     └── README.md
@@ -142,10 +145,10 @@ Store in OpenSearch (Haystack schema)
 
 ### Retrieval Flow
 ```
-Query → Embed Query → 
-┌─ BM25 Search (keywords)
-└─ Semantic Search (embeddings)
-→ Merge & Deduplicate → Ranked Results
+Query → OpenSearchHybridRetriever → 
+  ├─ BM25 Search (keywords)
+  └─ Semantic Search (embeddings)
+  → Reciprocal Rank Fusion → Ranked Results
 ```
 
 ## Configuration
@@ -189,10 +192,69 @@ python retrieval/query.py --query "CodeSplitter" --show-scores
 - Verify ingestion completed: Check logs for "100% success rate"
 - Count documents: `curl -k -u admin:admin "https://localhost:9200/code_index/_count?pretty"`
 
+## MCP Integration (Model Context Protocol)
+
+Deploy the retrieval pipeline as an MCP tool for IDE integration with Cursor or Claude Desktop.
+
+### Setup
+
+The pipeline wrapper is located in `pipelines/code-rag/pipeline_wrapper.py`. The MCP server auto-discovers pipelines from this directory.
+
+### Deployment Options
+
+Hayhooks provides two deployment modes:
+
+#### Option 1: MCP Server (for Cursor/IDE integration)
+```bash
+hayhooks mcp run
+```
+- **Purpose**: Exposes pipelines as MCP tools for IDE integration (Cursor, Claude Desktop)
+- **Port**: `1417` (default)
+- **Auto-loads**: Pipelines from `pipelines/` directory
+- **Use case**: Natural language code search directly in your IDE
+
+#### Option 2: REST API Server (for HTTP endpoints)
+```bash
+hayhooks run
+```
+- **Purpose**: Exposes pipelines as HTTP REST API endpoints
+- **Port**: `1416` (default)
+- **Use case**: Programmatic access, webhooks, external integrations
+
+**For this project, use Option 1 (MCP Server) for Cursor integration.**
+
+> 💡 **Note**: Both servers can run simultaneously in separate terminals if you need both IDE integration and REST API access.
+
+### Configuration
+
+**Configure Cursor** (Settings → MCP):
+```json
+{
+  "mcpServers": {
+    "hayhooks": {
+      "url": "http://localhost:1417/mcp"
+    }
+  }
+}
+```
+
+### Usage
+
+Once deployed, the `code-rag` tool will be available in Cursor. Search your code using natural language:
+
+**Example queries in Cursor chat:**
+- "Search for code that parses gitignore files"
+- "Find the vector embedding implementation"  
+- "Show me how OpenSearch connection is configured"
+- "Where is the CodeSplitter used?"
+
+The tool uses hybrid retrieval (BM25 + semantic search) and returns complete code snippets with file paths, languages, and relevance scores.
+
 ## Technologies
 
 - **LlamaIndex**: Document processing and ingestion
 - **Haystack**: Hybrid retrieval pipeline
+- **Hayhooks**: MCP server for IDE integration
 - **OpenSearch**: Vector database
 - **OpenAI**: Text embeddings (`text-embedding-3-small`)
 - **Tree-sitter**: Code parsing and chunking
