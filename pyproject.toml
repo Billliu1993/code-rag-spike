@@ -1,0 +1,12 @@
+[project]
+name = "code-rag-spike"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "haystack-ai>=2.18.1",
+    "llama-index>=0.14.4",
+    "llama-index-vector-stores-opensearch>=0.6.2",
+    "opensearch-haystack>=4.4.0",
+]
