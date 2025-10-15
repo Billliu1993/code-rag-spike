@@ -3,6 +3,7 @@ Main ingestion pipeline for code repositories into OpenSearch.
 Uses LlamaIndex with Haystack-compatible schema.
 """
 import os
+import sys
 import click
 from pathlib import Path
 from typing import List
@@ -11,6 +12,9 @@ from llama_index.core import VectorStoreIndex, Document, Settings, StorageContex
 from llama_index.core.node_parser import CodeSplitter, SentenceSplitter
 from llama_index.vector_stores.opensearch import OpensearchVectorStore, OpensearchVectorClient
 from llama_index.embeddings.openai import OpenAIEmbedding
+
+# Add parent directory to import root config
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import (
     OPENSEARCH_HOST,
@@ -24,7 +28,7 @@ from config import (
     TEXT_SPLITTER_CONFIG,
     MAX_FILE_SIZE_MB,
 )
-from utils import (
+from ingestion.utils import (
     detect_language,
     parse_gitignore,
     should_skip_file,

@@ -1,6 +1,5 @@
 """
-Configuration for the code ingestion pipeline.
-Manages OpenSearch connection and embedding settings with Haystack-compatible schema.
+Shared configuration for ingestion and retrieval pipelines.
 """
 import os
 from dotenv import load_dotenv
@@ -21,25 +20,32 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 EMBEDDING_MODEL = "text-embedding-3-small"
 
 # Haystack-compatible field mappings
+# Note: LlamaIndex stores as "metadata", so we use that for Haystack retrieval
 HAYSTACK_FIELD_MAPPING = {
     "embedding_field": "embedding",
     "text_field": "content",
-    "metadata_field": "meta",
+    "content_field": "content",  # For Haystack DocumentStore
+    "metadata_field": "metadata",  # Match what LlamaIndex actually stores
 }
 
-# Code Splitter Settings
+# Code Splitter Settings (for ingestion)
 CODE_SPLITTER_CONFIG = {
     "chunk_lines": 40,
     "chunk_lines_overlap": 15,
     "max_chars": 1500,
 }
 
-# Text Splitter Settings
+# Text Splitter Settings (for ingestion)
 TEXT_SPLITTER_CONFIG = {
     "chunk_size": 1024,
     "chunk_overlap": 200,
 }
 
-# File Processing Settings
+# File Processing Settings (for ingestion)
 MAX_FILE_SIZE_MB = 1  # Skip files larger than this
+
+# Retrieval Settings
+DEFAULT_TOP_K_BM25 = 3
+DEFAULT_TOP_K_EMBEDDING = 3
+DEFAULT_JOIN_MODE = "reciprocal_rank_fusion"
 
