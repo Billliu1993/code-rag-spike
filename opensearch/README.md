@@ -95,6 +95,42 @@ client = OpenSearch(
 )
 ```
 
+## Index Management
+
+### List all indices
+```bash
+curl -k -u admin:admin -X GET "https://localhost:9200/_cat/indices?v"
+```
+
+### Delete an index
+```bash
+# Delete a specific index (e.g., code_index)
+curl -k -u admin:admin -X DELETE "https://localhost:9200/code_index?pretty"
+```
+
+### Verify index deletion
+```bash
+curl -k -u admin:admin -X GET "https://localhost:9200/_cat/indices?v"
+```
+
+### Count documents in an index
+```bash
+curl -k -u admin:admin -X GET "https://localhost:9200/code_index/_count?pretty"
+```
+
+### Search/query an index
+```bash
+# Get one sample document
+curl -k -u admin:admin -X GET "https://localhost:9200/code_index/_search?pretty" -H 'Content-Type: application/json' -d'
+{
+  "size": 1,
+  "query": {
+    "match_all": {}
+  }
+}
+'
+```
+
 ## Troubleshooting
 
 ### Container won't start
