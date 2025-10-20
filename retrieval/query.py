@@ -10,9 +10,24 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from retrieval.pipeline import create_hybrid_pipeline, query_pipeline
-from config import DEFAULT_TOP_K_BM25, DEFAULT_TOP_K_EMBEDDING
+from config import DEFAULT_TOP_K_BM25, DEFAULT_TOP_K_EMBEDDING, TRACEL_API_KEY
+
+from traceloop.sdk import Traceloop
+from traceloop.sdk.decorators import workflow, task
+
+Traceloop.init(app_name="retrieval", disable_batch=True, telemetry_enabled=False, api_key=TRACEL_API_KEY)
+
+import logging
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+LoggingInstrumentor().instrument(
+    set_logging_format=True,
+    log_level=logging.WARNING  # Set to WARNING for testing
+)
+logger = logging.getLogger(__name__)
 
 
+
+@task(name="format_document")
 def format_document(doc: Any, index: int, show_scores: bool = False, show_metadata: bool = False) -> str:
     """
     Format a single document for display.
@@ -78,6 +93,7 @@ def format_document(doc: Any, index: int, show_scores: bool = False, show_metada
 @click.option('--top-k-embedding', default=DEFAULT_TOP_K_EMBEDDING, help='Number of semantic (embedding) results')
 @click.option('--show-scores', is_flag=True, help='Show relevance scores')
 @click.option('--show-metadata', is_flag=True, help='Show full metadata for each result')
+@workflow(name="retrieval_workflow")
 def main(query: str, top_k_bm25: int, top_k_embedding: int, show_scores: bool, show_metadata: bool):
     """
     Query the hybrid retrieval pipeline.
