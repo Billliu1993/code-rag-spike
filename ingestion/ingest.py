@@ -5,6 +5,7 @@ Uses LlamaIndex with Haystack-compatible schema.
 import os
 import sys
 import click
+import logging
 from pathlib import Path
 from typing import List
 
@@ -12,6 +13,9 @@ from llama_index.core import VectorStoreIndex, Document, Settings, StorageContex
 from llama_index.core.node_parser import CodeSplitter, SentenceSplitter
 from llama_index.vector_stores.opensearch import OpensearchVectorStore, OpensearchVectorClient
 from llama_index.embeddings.openai import OpenAIEmbedding
+
+from traceloop.sdk import Traceloop
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
 
 # Add parent directory to import root config
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,6 +27,7 @@ from config import (
     OPENSEARCH_INDEX,
     OPENAI_API_KEY,
     EMBEDDING_MODEL,
+    TRACEL_API_KEY,
     HAYSTACK_FIELD_MAPPING,
     CODE_SPLITTER_CONFIG,
     TEXT_SPLITTER_CONFIG,
@@ -34,6 +39,22 @@ from ingestion.utils import (
     should_skip_file,
     check_file_should_process,
 )
+
+# Initialize Traceloop for tracing (MUST be first to set up tracer provider)
+Traceloop.init(app_name="ingestion", disable_batch=True, telemetry_enabled=False, api_key=TRACEL_API_KEY)
+
+# Integrate Python logging with OpenTelemetry for trace correlation
+# set_logging_format=True calls logging.basicConfig() with trace context format
+# IMPORTANT: Must be called BEFORE any logging.basicConfig() or getLogger() calls
+LoggingInstrumentor().instrument(
+    set_logging_format=True,
+    log_level=logging.WARNING  # Set to WARNING for testing
+)
+
+# Get logger AFTER instrumentation
+logger = logging.getLogger(__name__)
+
+logger.warning("Traceloop initialized for ingestion tracing")
 
 
 def get_vector_store() -> OpensearchVectorStore:
@@ -142,6 +163,7 @@ def process_file(file_path: str, repo_path: str, repo_name: str, vector_store: O
         
         # Detect language and content type
         is_code, language = detect_language(file_path)
+        logger.warning(f"Processing {rel_path}: is_code={is_code}, language={language}")
         
         # Create document with metadata
         metadata = {
@@ -181,10 +203,11 @@ def process_file(file_path: str, repo_path: str, repo_name: str, vector_store: O
             show_progress=False,
         )
         
+        logger.debug(f"Successfully ingested {rel_path}")
         return True
         
     except Exception as e:
-        print(f"Error processing {file_path}: {str(e)}")
+        logger.error(f"Error processing {file_path}: {str(e)}", exc_info=True)
         return False
 
 
@@ -201,9 +224,17 @@ def main(repo_path: str, verbose: bool):
     - Uses appropriate chunking strategies (CodeSplitter for code, SentenceSplitter for text)
     - Stores documents in Haystack-compatible schema
     """
+    # Set log level based on verbose flag
+    if verbose:
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Verbose mode enabled")
+    
+    logger.warning("Starting ingestion pipeline")
+    
     # Validate environment variables
     if not OPENAI_API_KEY:
         click.echo("Error: OPENAI_API_KEY environment variable not set", err=True)
+        logger.error("OPENAI_API_KEY not set")
         return
     
     # Configure embedding model globally
@@ -221,6 +252,9 @@ def main(repo_path: str, verbose: bool):
     click.echo(f"🤖 Embedding model: {EMBEDDING_MODEL}")
     click.echo()
     
+    logger.warning(f"Repository: {repo_name}, Path: {repo_path}")
+    logger.warning(f"OpenSearch index: {OPENSEARCH_INDEX}, Embedding model: {EMBEDDING_MODEL}")
+    
     # Parse gitignore
     click.echo("📋 Parsing .gitignore...")
     gitignore_patterns = parse_gitignore(repo_path)
@@ -236,17 +270,26 @@ def main(repo_path: str, verbose: bool):
     click.echo(f"   Found {len(files_to_process)} files to process")
     click.echo()
     
+    logger.warning(f"Collected {len(files_to_process)} files to process")
+    if skip_stats:
+        total_skipped = sum(skip_stats.values())
+        logger.debug(f"Skipped {total_skipped} files: {skip_stats}")
+    
     if not files_to_process:
         click.echo("⚠️  No files to process!")
+        logger.warning("No files to process")
         return
     
     # Initialize vector store
     click.echo("🔌 Connecting to OpenSearch...")
+    logger.warning(f"Connecting to OpenSearch at {OPENSEARCH_HOST}")
     try:
         vector_store = get_vector_store()
         click.echo("   Connected successfully")
+        logger.warning("Successfully connected to OpenSearch")
     except Exception as e:
         click.echo(f"❌ Failed to connect to OpenSearch: {e}", err=True)
+        logger.error(f"Failed to connect to OpenSearch: {e}", exc_info=True)
         return
     
     click.echo()
@@ -272,7 +315,12 @@ def main(repo_path: str, verbose: bool):
     click.echo(f"❌ Failed: {failed} files")
     click.echo(f"📈 Total attempted: {len(files_to_process)} files")
     if len(files_to_process) > 0:
-        click.echo(f"🎯 Success rate: {(successful/len(files_to_process)*100):.1f}%")
+        success_rate = (successful/len(files_to_process)*100)
+        click.echo(f"🎯 Success rate: {success_rate:.1f}%")
+        logger.warning(f"Ingestion complete: {successful}/{len(files_to_process)} files successful ({success_rate:.1f}%)")
+    
+    if failed > 0:
+        logger.warning(f"{failed} files failed to process")
     
     # Show skip statistics
     if skip_stats:

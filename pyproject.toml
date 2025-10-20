@@ -10,5 +10,6 @@ dependencies = [
     "llama-index>=0.14.4",
     "llama-index-vector-stores-opensearch>=0.6.2",
     "opensearch-haystack>=4.4.0",
+    "traceloop-sdk>=0.47.3",
     "tree-sitter-language-pack>=0.10.0",
 ]

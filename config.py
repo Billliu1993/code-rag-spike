@@ -16,6 +16,9 @@ OPENSEARCH_INDEX = os.getenv("OPENSEARCH_INDEX", "code_index")
 # OpenAI Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# Traceloop Configuration
+TRACEL_API_KEY = os.getenv("TRACEL_API_KEY")
+
 # Embedding Model
 EMBEDDING_MODEL = "text-embedding-3-small"
 
