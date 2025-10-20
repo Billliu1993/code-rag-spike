@@ -6,6 +6,10 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+import logging
+from traceloop.sdk import Traceloop
+from traceloop.sdk.decorators import workflow, task
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
 
 # Load environment variables BEFORE importing Haystack (for telemetry settings)
 load_dotenv()
@@ -31,9 +35,24 @@ from config import (
     DEFAULT_TOP_K_BM25,
     DEFAULT_TOP_K_EMBEDDING,
     DEFAULT_JOIN_MODE,
+    TRACEL_API_KEY,
 )
 
+# Initialize Traceloop for tracing (MUST be first to set up tracer provider)
+# Traceloop.init(app_name="retrieval", disable_batch=True, telemetry_enabled=False, api_key=TRACEL_API_KEY)
 
+# Integrate Python logging with OpenTelemetry for trace correlation
+# set_logging_format=True calls logging.basicConfig() with trace context format
+# IMPORTANT: Must be called BEFORE any logging.basicConfig() or getLogger() calls
+LoggingInstrumentor().instrument(
+    set_logging_format=True,
+    log_level=logging.WARNING  # Set to WARNING for testing
+)
+
+# Get logger AFTER instrumentation
+logger = logging.getLogger(__name__)
+
+@task(name="connect_to_db")
 def get_document_store() -> OpenSearchDocumentStore:
     """
     Initialize OpenSearch document store with same configuration as ingestion.
@@ -61,7 +80,7 @@ def get_document_store() -> OpenSearchDocumentStore:
     
     return document_store
 
-
+@task(name="create_pipeline")
 def create_hybrid_pipeline(
     top_k_bm25: int = DEFAULT_TOP_K_BM25,
     top_k_embedding: int = DEFAULT_TOP_K_EMBEDDING,
@@ -100,7 +119,7 @@ def create_hybrid_pipeline(
     
     return pipeline
 
-
+@task(name="run_query")
 def query_pipeline(
     pipeline: Pipeline,
     query: str,
@@ -118,6 +137,6 @@ def query_pipeline(
     result = pipeline.run({
         "retriever": {"query": query},
     })
-    
+    logger.warning("Query pipeline completed")
     return result
 
